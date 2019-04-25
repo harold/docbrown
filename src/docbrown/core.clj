@@ -1,71 +1,33 @@
 (ns docbrown.core
   (:require [clojure.java.shell :as shell]
+            [docbrown.util :refer [mapmap] :as util]
+            [docbrown.clojure-reader :as clojure-reader]
             [crux.api :as crux])
   (:import [java.util Date UUID]
-           [crux.api ICruxAPI])
-  (:gen-class))
+           [crux.api ICruxAPI]))
 
-(defn mapmap
-  "Applies mapv f to args, filters out nils and returns the result as a map.
-  f should return a two element vector or nil."
-  [f & args]
-  (->> (apply mapv f args)
-       (remove nil?)
-       (into {})))
-
-(defn- sh
-  [& args]
-  (:out (apply shell/sh args)))
-
-(defn- lines
-  [s]
-  (clojure.string/split-lines s))
-
-(defn- columns
-  [s]
-  (clojure.string/split s #"\s"))
-
-(defn- git-cat
-  [sha]
-  (sh "git" "cat-file" "-p" sha))
-
-(defn- tree->paths
-  [sha & {:keys [path]}]
-  (->> (git-cat sha)
-       (lines)
-       (map columns)
-       (mapv (fn [[_ k child-sha n]]
-               (condp = k
-                 "blob" (let [content (git-cat child-sha)]
-                          {:sha child-sha
-                           :path (clojure.string/join "/" (conj path n))
-                           :content content
-                           :hash child-sha})
-                 "tree" (tree->paths child-sha :path (conj (or path []) n))
-                 nil)))
-       (flatten)))
+(def ^:dynamic *system* nil)
+(defn system [] *system*)
 
 (defn- commit->data
   [sha]
-  (let [m (->> (git-cat sha)
-               (lines)
-               (map columns)
+  (let [m (->> (util/git-cat sha)
+               (util/lines)
+               (map util/columns)
                (mapmap (fn [[k :as line]]
                          (condp = k
                            "tree" [:tree (nth line 1)]
                            "author" [:inst (->> line reverse second Integer/parseInt (* 1000) Date.)]
                            nil))))]
     (assoc m :sha sha
-           :paths (tree->paths (:tree m)))))
+           :paths (util/tree->paths (:tree m)))))
 
-(defonce path-uuids* (atom {}))
-
-(defn- path->uuid
+(defn path->rid
   [path]
-  (or (get @path-uuids* path)
-      (let [uuid (UUID/randomUUID)]
-        (swap! path-uuids* assoc path uuid)
-        uuid)))
+  (->> (crux/q (crux/db *system*)
+               {:find ['e]
+                :where [['e :path path]]})
+       (ffirst)))
 
 (defn- submit-data
   [system {:keys [sha inst paths]}]
@@ -74,12 +36,17 @@
                                {:find ['e]
                                 :where [['e :path path]
                                         ['e :hash sha]]}))
-           (let [uuid (path->uuid path)]
+           (let [uuid (or (path->rid path) (UUID/randomUUID))
+                 data (cond
+                        (re-find #"\.clj.?$" path) (clojure-reader/content->data content)
+                        :else nil)]
              [:crux.tx/put uuid
-              {:crux.db/id uuid
-               :path path
-               :hash sha
-               :content content}
+              (merge
+                {:crux.db/id uuid
+                 :path path
+                 :hash sha
+                 :content content}
+                (when data {:data data}))
               inst])))
        (remove nil?)
        (vec)
@@ -89,43 +56,25 @@
        (crux/submit-tx system)))
 
 (defn ingest
-  [system repo-path]
+  [repo-path]
   (shell/with-sh-dir repo-path
-    (->> (sh "git" "log" "--pretty=format:%h" "--date-order" "--reverse")
-         (lines)
+    (->> (util/sh "git" "log" "--pretty=format:%h" "--date-order" "--reverse")
+         (util/lines)
          (pmap commit->data)
-         (map (partial submit-data system))
+         (map (partial submit-data *system*))
          (doall))))
 
-(defn -main
-  [& args]
-  (let [repo-full-path (first args)
-        system (crux/start-standalone-system {:kv-backend "crux.kv.rocksdb.RocksKv"
-                                              :db-dir "data/db-dir-1"})]
-    (ingest system repo-full-path)
-    (shutdown-agents)))
+(defn rid->valid-times
+  [rid]
+  (->> (crux/history (system) rid)
+       (map :crux.db/valid-time)))
 
-(comment
-
-  (def ^crux.api.ICruxAPI system
-    (crux/start-standalone-system {:kv-backend "crux.kv.rocksdb.RocksKv"
-                                   :db-dir "data/db-dir-1"}))
-
-  (->> (crux/q (crux/db system)
-               '{:find [rid p]
-                 :where [[e :crux.db/id rid]
-                         [e :path p]]})
-       (vec)
-       (rand-nth)
-       (first)
-       ((fn [x] (println x) x))
-       (crux/history system)
-       (clojure.pprint/pprint))
-
-  )
+(defn rid+time->data
+  [rid t]
+  (crux/entity (crux/db (system) t) rid))
 
 (defn- diff
   [system rid t1 t2]
   (spit "/tmp/f1" (:content (crux/entity (crux/db system t1) rid)))
   (spit "/tmp/f2" (:content (crux/entity (crux/db system t2) rid)))
-  (println (sh "diff" "/tmp/f1" "/tmp/f2")))
+  (println (util/sh "diff" "/tmp/f1" "/tmp/f2")))
