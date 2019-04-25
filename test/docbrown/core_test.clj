@@ -1,18 +1,16 @@
 (ns docbrown.core-test
-  (:require [clojure.test :refer [is deftest use-fixtures]]
+  (:require [clojure.pprint]
+            [clojure.test :refer [is deftest use-fixtures]]
             [crux.api :as crux]
             [docbrown.core :as docbrown]
             [docbrown.test-utils :as test-utils]))
 
 (use-fixtures :each test-utils/test-system-fixture)
 
-(deftest basic-injest-test
-  (let [first-entry (->> (crux/q (crux/db (docbrown/system))
-                                 '{:find [rid p]
-                                   :where [[e :crux.db/id rid]
-                                           [e :path p]]})
-                         (first))]
-    (is first-entry)))
+(deftest basic-ingest-test
+  (let [entries (docbrown/entries)]
+    (clojure.pprint/pprint entries)
+    (is (not-empty entries))))
 
 (deftest valid-times-test
   (let [test-file "README.md"
@@ -25,5 +23,4 @@
         test-file-rid (docbrown/path->rid test-file)
         datas (for [t (docbrown/rid->valid-times test-file-rid)]
                 (:data (docbrown/rid+time->data test-file-rid t)))]
-    (pprint datas)
     (is (pos? (count datas)))))

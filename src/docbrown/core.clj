@@ -3,8 +3,7 @@
             [docbrown.util :refer [mapmap] :as util]
             [docbrown.clojure-reader :as clojure-reader]
             [crux.api :as crux])
-  (:import [java.util Date UUID]
-           [crux.api ICruxAPI]))
+  (:import [java.util Date UUID]))
 
 (def ^:dynamic *system* nil)
 (defn system [] *system*)
@@ -63,6 +62,15 @@
          (pmap commit->data)
          (map (partial submit-data *system*))
          (doall))))
+
+(defn entries
+  []
+  (->> (crux/q (crux/db (system))
+               '{:find [rid p]
+                 :where [[e :crux.db/id rid]
+                         [e :path p]]})
+       (mapmap (fn [[rid p]]
+                 [rid {:path p}]))))
 
 (defn rid->valid-times
   [rid]
