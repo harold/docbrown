@@ -8,19 +8,24 @@
 (use-fixtures :each test-utils/test-system-fixture)
 
 (deftest basic-ingest-test
-  (let [entries (docbrown/entries)]
-    (clojure.pprint/pprint entries)
-    (is (not-empty entries))))
+  (let [commits (docbrown/commits)
+        files (docbrown/files)
+        namespaces (docbrown/namespaces)
+        defs (docbrown/defs)]
+    (is (not-empty commits))
+    (is (not-empty files))
+    (is (not-empty namespaces))
+    (is (not-empty defs))))
 
 (deftest valid-times-test
-  (let [test-file "README.md"
-        valid-times (->> (docbrown/path->rid test-file)
+  (let [valid-times (->> (docbrown/lookup-rid {:resource/type :resource.type/file
+                                               :file/path "README.md"})
                          (docbrown/rid->valid-times))]
     (is (every? inst? valid-times))))
 
 (deftest file-data-seq-test
-  (let [test-file "src/docbrown/core.clj"
-        test-file-rid (docbrown/path->rid test-file)
+  (let [test-file-rid (docbrown/lookup-rid {:resource/type :resource.type/file
+                                            :file/path "src/docbrown/core.clj"})
         datas (for [t (docbrown/rid->valid-times test-file-rid)]
                 (:data (docbrown/rid+time->data test-file-rid t)))]
     (is (pos? (count datas)))))

@@ -1,29 +1,43 @@
 (ns docbrown.clojure-reader
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [docbrown.util :as util]))
+
+(defmethod util/unique-key :resource.type/namespace [_] :namespace/name)
+
+(defmethod util/unique-key :resource.type/def [_] :def/name)
 
 (defn- form->data
-  [form]
+  [namespace-name form]
   (let [{:keys [line column]} (meta form)
-        form-name (cond
-                    (= 'ns (first form)) (second form)
-                    (str/starts-with? (str (first form)) "def") (second form)
-                    :default :unknown)]
-    {:src form
-     :line line
-     :column column
-     :name form-name}))
+        s (str (first form))
+        data (cond
+               (= "ns" s) {:resource/type :resource.type/namespace
+                           :namespace/name (str (second form))}
+               (str/starts-with? s "def") {:resource/type :resource.type/def
+                                           :def/type (str (first form))
+                                           :def/name (if namespace-name
+                                                       (str namespace-name "/" (second form))
+                                                       (str (second form)))}
+               :default nil)]
+    (when (:resource/type data)
+      (merge {:line line
+              :column column}
+             data))))
 
 (defn content->data
-   [content]
-   (with-open [r (clojure.lang.LineNumberingPushbackReader. (java.io.StringReader. content))]
-     (let [eof (Object.)]
-       (loop [out []
-              form (read r false eof)]
-         (if (= eof form)
-           out
-           (let [out (conj out (assoc (form->data form)
+  [content]
+  (with-open [r (clojure.lang.LineNumberingPushbackReader. (java.io.StringReader. content))]
+    (let [eof (Object.)]
+      (loop [out []
+             form (read r false eof)
+             namespace-name nil]
+        (if (= eof form)
+          out
+          (let [maybe-data (form->data namespace-name form)
+                namespace-name (or (:namespace/name maybe-data) namespace-name)]
+            (if maybe-data
+              (recur (conj out (assoc maybe-data
                                       :endline (.getLineNumber r)
-                                      :endcol (.getColumnNumber r)))]
-             (recur out (read r false eof))))))))
-
-
+                                      :endcolumn (.getColumnNumber r)))
+                     (read r false eof) namespace-name)
+              (recur out (read r false eof) namespace-name))))))))

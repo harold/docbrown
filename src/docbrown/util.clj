@@ -1,5 +1,6 @@
 (ns docbrown.util
-  (:require [clojure.java.shell :as shell]))
+  (:require [clojure.java.shell :as shell]
+            [crux.api :as crux]))
 
 (defn mapmap
   "Applies mapv f to args, filters out nils and returns the result as a map.
@@ -21,6 +22,12 @@
   [s]
   (clojure.string/split s #"\s"))
 
+(defmulti unique-key :resource/type)
+
+(defmethod unique-key :resource.type/commit [_] :commit/sha)
+
+(defmethod unique-key :resource.type/file [_] :file/path)
+
 (defn git-cat
   [sha]
   (sh "git" "cat-file" "-p" sha))
@@ -32,11 +39,9 @@
        (map columns)
        (mapv (fn [[_ k child-sha n]]
                (condp = k
-                 "blob" (let [content (git-cat child-sha)]
-                          {:sha child-sha
-                           :path (clojure.string/join "/" (conj path n))
-                           :content content
-                           :hash child-sha})
+                 "blob" {:resource/type :resource.type/file
+                         :file/sha child-sha
+                         :file/path (clojure.string/join "/" (conj path n))}
                  "tree" (tree->paths child-sha :path (conj (or path []) n))
                  nil)))
        (flatten)))

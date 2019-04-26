@@ -28,11 +28,11 @@
       (response/response)
       (response/header "Content-Type" "text/html")))
 
-(defn- get-paths
+(defn- get-files
   [req]
-  (response/response (docbrown/entries)))
+  (response/response (docbrown/files)))
 
-(def routes ["/" {:get [["paths" #'get-paths]
+(def routes ["/" {:get [["files" #'get-files]
                         [true #'home-page]]}])
 
 (defn handler
