@@ -6,7 +6,7 @@
             [crux.api :as crux])
   (:import [java.util Date UUID]))
 
-(def ^:dynamic *system* nil)
+(defonce ^:dynamic *system* nil)
 (defn system [] *system*)
 
 (def blank-line (->> "\r?\n"
@@ -100,8 +100,10 @@
          (doall))))
 
 (defn items-by-resource-type
-  [resource-type]
-  (let [db (crux/db (system))]
+  [resource-type & {:keys [t]}]
+  (let [db (if t
+             (crux/db (system) t)
+             (crux/db (system)))]
     (->> (crux/q db
                  {:find '[rid]
                   :where [['e :crux.db/id 'rid]
@@ -121,8 +123,10 @@
   (items-by-resource-type :resource.type/namespace))
 
 (defn defs
-  []
-  (items-by-resource-type :resource.type/def))
+  [& {:keys [t]}]
+  (if t
+    (items-by-resource-type :resource.type/def :t t)
+    (items-by-resource-type :resource.type/def)))
 
 (defn rid->valid-times
   [rid]

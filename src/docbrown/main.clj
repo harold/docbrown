@@ -11,7 +11,10 @@
             [muuntaja.middleware :refer [wrap-format]]
             [crux.api :as crux]
             [docbrown.core :as docbrown])
+  (:import [java.util UUID])
   (:gen-class))
+
+(defonce stop-web-server-fn* (atom nil))
 
 (defn- home-page
   [request]
@@ -28,11 +31,21 @@
       (response/response)
       (response/header "Content-Type" "text/html")))
 
-(defn- get-files
+(defn- get-commits
   [req]
-  (response/response (docbrown/files)))
+  (response/response (docbrown/commits)))
 
-(def routes ["/" {:get [["files" #'get-files]
+(defn- get-defs
+  [req]
+  (let [rid (UUID/fromString (-> req :params :id))]
+    (->> rid
+         (crux/entity (crux/db docbrown/*system*))
+         (:commit/inst)
+         (docbrown/defs :t)
+         (response/response))))
+
+(def routes ["/" {:get [["commits" #'get-commits]
+                        [["defs/" :id] #'get-defs]
                         [true #'home-page]]}])
 
 (defn handler
@@ -45,13 +58,21 @@
       (wrap-resource "public")
       (wrap-content-type)))
 
+(defn restart-web-server!
+  []
+  (when-let [stop-web-server-fn @stop-web-server-fn*]
+    (stop-web-server-fn))
+  (let [port 1922]
+    (reset! stop-web-server-fn* (http/run-server (handler) {:port port}))
+    (println "Server started on port" port)))
+
 (defn -main
   [& args]
   (let [repo-full-path (or (first args) ".")
-        system (crux/start-standalone-system {:kv-backend "crux.kv.rocksdb.RocksKv"
-                                              :db-dir "data/db-dir-1"})
-        port 1922]
+        ;; system (crux/start-standalone-system {:kv-backend "crux.kv.rocksdb.RocksKv"
+        ;;                                       :db-dir "data/db-dir-1"})
+        system (crux/start-standalone-system {:kv-backend "crux.kv.memdb.MemKv"
+                                              :db-dir (str (UUID/randomUUID))})]
     (alter-var-root #'docbrown/*system* (constantly system))
     (docbrown/ingest repo-full-path)
-    (http/run-server (handler) {:port port})
-    (println "Server started on port" port)))
+    (restart-web-server!)))

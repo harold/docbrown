@@ -8,8 +8,8 @@ pom.xml.asc
 *.class
 /.lein-*
 /.nrepl-port
-.hgignore
-.hg/
 
-data
-figwheel_server.log
+/resources/public/css/site.css
+/resources/public/js
+/data
+/figwheel_server.log
