@@ -10,7 +10,8 @@
             [bidi.ring :as bidi-ring]
             [muuntaja.middleware :refer [wrap-format]]
             [crux.api :as crux]
-            [docbrown.core :as docbrown])
+            [docbrown.core :as docbrown]
+            [docbrown.util :as util])
   (:import [java.util UUID])
   (:gen-class))
 
@@ -35,17 +36,47 @@
   [req]
   (response/response (docbrown/commits)))
 
-(defn- get-defs
+(defn- get-namespaces
   [req]
   (let [rid (UUID/fromString (-> req :params :id))]
     (->> rid
          (crux/entity (crux/db docbrown/*system*))
          (:commit/inst)
-         (docbrown/defs :t)
+         (docbrown/namespaces :t)
+         (response/response))))
+
+(defn- get-defs
+  [req]
+  (let [rid (UUID/fromString (-> req :params :id))
+        namespace-name (-> req :params :namespace-name)]
+    (->> rid
+         (crux/entity (crux/db docbrown/*system*))
+         (:commit/inst)
+         (docbrown/defs :namespace-name namespace-name :t)
+         (response/response))))
+
+(defn- get-def-history
+  [req]
+  (let [def-rid (UUID/fromString (-> req :params :id))
+        insts (docbrown/rid->valid-times def-rid)
+        snip (fn [start end content]
+               (as-> content content
+                 (util/lines content)
+                 (drop (dec start) content)
+                 (take (inc (- end start)) content)))]
+    (->> (for [inst insts]
+           (let [d (docbrown/rid+time->data def-rid inst)]
+             {:inst inst
+              :content (->> (docbrown/rid+time->data (:loc/file d) inst)
+                            (:file/content)
+                            (snip (:loc/line d) (:loc/endline d))
+                            (clojure.string/join "\n"))}))
          (response/response))))
 
 (def routes ["/" {:get [["commits" #'get-commits]
-                        [["defs/" :id] #'get-defs]
+                        [["namespaces/" :id] #'get-namespaces]
+                        [["defs/" :id "/" :namespace-name] #'get-defs]
+                        [["def-history/" :id] #'get-def-history]
                         [true #'home-page]]}])
 
 (defn handler

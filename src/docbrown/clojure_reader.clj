@@ -10,18 +10,20 @@
   [namespace-name form]
   (let [{:keys [line column]} (meta form)
         s (str (first form))
+        n (str (second form))
         data (cond
                (= "ns" s) {:resource/type :resource.type/namespace
-                           :namespace/name (str (second form))}
-               (str/starts-with? s "def") {:resource/type :resource.type/def
-                                           :def/type (str (first form))
-                                           :def/name (if namespace-name
-                                                       (str namespace-name "/" (second form))
-                                                       (str (second form)))}
+                           :namespace/name n}
+               (str/starts-with? s "def") (merge {:resource/type :resource.type/def
+                                                  :def/type s}
+                                                 (if namespace-name
+                                                   {:def/namespace namespace-name
+                                                    :def/name (str namespace-name "/" n)}
+                                                   {:def/name n}))
                :default nil)]
     (when (:resource/type data)
-      (merge {:line line
-              :column column}
+      (merge {:loc/line line
+              :loc/column column}
              data))))
 
 (defn content->data
@@ -37,7 +39,7 @@
                 namespace-name (or (:namespace/name maybe-data) namespace-name)]
             (if maybe-data
               (recur (conj out (assoc maybe-data
-                                      :endline (.getLineNumber r)
-                                      :endcolumn (.getColumnNumber r)))
+                                      :loc/endline (.getLineNumber r)
+                                      :loc/endcolumn (.getColumnNumber r)))
                      (read r false eof) namespace-name)
               (recur out (read r false eof) namespace-name))))))))

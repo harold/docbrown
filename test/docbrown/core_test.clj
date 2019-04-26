@@ -3,6 +3,7 @@
             [clojure.test :refer [is deftest use-fixtures]]
             [crux.api :as crux]
             [docbrown.core :as docbrown]
+            [docbrown.util :as util]
             [docbrown.test-utils :as test-utils]))
 
 (use-fixtures :each test-utils/test-system-fixture)
@@ -29,3 +30,19 @@
         datas (for [t (docbrown/rid->valid-times test-file-rid)]
                 (:data (docbrown/rid+time->data test-file-rid t)))]
     (is (pos? (count datas)))))
+
+(deftest def-history-test
+  (let [d (rand-nth (docbrown/defs))
+        ts (docbrown/rid->valid-times (:crux.db/id d))
+        snip (fn [start end content]
+               (as-> content content
+                 (util/lines content)
+                 (drop (dec start) content)
+                 (take (inc (- end start)) content)))
+        history (for [inst ts]
+                  {:inst inst
+                   :content (->> (docbrown/rid+time->data (:loc/file d) inst)
+                                 (:file/content)
+                                 (snip (:loc/line d) (:loc/endline d))
+                                 (clojure.string/join "\n"))})]
+    (is (every? map? history))))

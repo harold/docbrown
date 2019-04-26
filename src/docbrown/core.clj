@@ -76,7 +76,8 @@
                                    (for [d data]
                                      (let [data-rid (or (lookup-rid d) (UUID/randomUUID))]
                                        [:crux.tx/put data-rid
-                                        (merge {:crux.db/id data-rid}
+                                        (merge {:crux.db/id data-rid
+                                                :loc/file file-rid}
                                                d)
                                         inst])))
                            (vec)))
@@ -119,14 +120,17 @@
   (items-by-resource-type :resource.type/file))
 
 (defn namespaces
-  []
-  (items-by-resource-type :resource.type/namespace))
-
-(defn defs
   [& {:keys [t]}]
   (if t
-    (items-by-resource-type :resource.type/def :t t)
-    (items-by-resource-type :resource.type/def)))
+    (items-by-resource-type :resource.type/namespace :t t)
+    (items-by-resource-type :resource.type/namespace)))
+
+(defn defs
+  [& {:keys [namespace-name t]}]
+  (cond->> (if t
+             (items-by-resource-type :resource.type/def :t t)
+             (items-by-resource-type :resource.type/def))
+    namespace-name (filter #(= namespace-name (:def/namespace %)))))
 
 (defn rid->valid-times
   [rid]
