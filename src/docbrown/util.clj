@@ -1,6 +1,5 @@
 (ns docbrown.util
-  (:require [clojure.java.shell :as shell]
-            [crux.api :as crux]))
+  (:require [clojure.java.shell :as shell]))
 
 (defn mapmap
   "Applies mapv f to args, filters out nils and returns the result as a map.

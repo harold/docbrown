@@ -44,7 +44,7 @@
            :commit/paths (util/tree->paths (:commit/tree m)))))
 
 (defn- submit-data
-  [system {:keys [commit/sha commit/message commit/inst commit/paths] :as commit}]
+  [system {:keys [commit/sha commit/message commit/inst commit/paths]}]
   (let [commit-rid (UUID/randomUUID)
         commit-tx [:crux.tx/put commit-rid
                    {:crux.db/id commit-rid
@@ -141,8 +141,8 @@
   [rid t]
   (crux/entity (crux/db (system) t) rid))
 
-(defn- diff
-  [system rid t1 t2]
-  (spit "/tmp/f1" (:file/content (crux/entity (crux/db system t1) rid)))
-  (spit "/tmp/f2" (:file/content (crux/entity (crux/db system t2) rid)))
-  (println (util/sh "diff" "/tmp/f1" "/tmp/f2")))
+;; (defn- diff
+;;   [system rid t1 t2]
+;;   (spit "/tmp/f1" (:file/content (crux/entity (crux/db system t1) rid)))
+;;   (spit "/tmp/f2" (:file/content (crux/entity (crux/db system t2) rid)))
+;;   (println (util/sh "diff" "/tmp/f1" "/tmp/f2")))

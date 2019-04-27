@@ -1,7 +1,6 @@
 (ns docbrown.core-test
   (:require [clojure.pprint]
             [clojure.test :refer [is deftest use-fixtures]]
-            [crux.api :as crux]
             [docbrown.core :as docbrown]
             [docbrown.util :as util]
             [docbrown.test-utils :as test-utils]))
