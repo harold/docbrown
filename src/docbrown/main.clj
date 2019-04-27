@@ -34,15 +34,20 @@
 
 (defn- get-commits
   [req]
-  (response/response (docbrown/commits)))
+  (response/response (docbrown/items-by-resource-type :resource.type/commit)))
+
+(defn- commit-rid->inst
+  [commit-rid]
+  (->> commit-rid
+       (crux/entity (crux/db docbrown/*system*))
+       (:commit/inst)))
 
 (defn- get-namespaces
   [req]
   (let [rid (UUID/fromString (-> req :params :id))]
     (->> rid
-         (crux/entity (crux/db docbrown/*system*))
-         (:commit/inst)
-         (docbrown/namespaces :t)
+         (commit-rid->inst)
+         (docbrown/items-by-resource-type :resource.type/namespace :t)
          (response/response))))
 
 (defn- get-defs
@@ -50,9 +55,9 @@
   (let [rid (UUID/fromString (-> req :params :id))
         namespace-name (-> req :params :namespace-name)]
     (->> rid
-         (crux/entity (crux/db docbrown/*system*))
-         (:commit/inst)
-         (docbrown/defs :namespace-name namespace-name :t)
+         (commit-rid->inst)
+         (docbrown/items-by-resource-type :resource.type/def :t)
+         (filter #(= namespace-name (:def/namespace %)))
          (response/response))))
 
 (defn- get-def-history
@@ -65,12 +70,15 @@
                  (drop (dec start) content)
                  (take (inc (- end start)) content)))]
     (->> (for [inst insts]
-           (let [d (docbrown/rid+time->data def-rid inst)]
+           (when-let [d (docbrown/rid+time->data def-rid inst)]
              {:inst inst
               :content (->> (docbrown/rid+time->data (:loc/file d) inst)
                             (:file/content)
                             (snip (:loc/line d) (:loc/endline d))
                             (clojure.string/join "\n"))}))
+         (remove nil?)
+         (partition-by :content)
+         (map first)
          (response/response))))
 
 (def routes ["/" {:get [["commits" #'get-commits]

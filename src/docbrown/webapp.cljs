@@ -58,7 +58,7 @@
    (fn [{:keys [commit/inst]}] (.toLocaleString inst))
    (fn [{:keys [crux.db/id]}]
      (swap! state* assoc :selected-commit-id id)
-     (swap! state* dissoc :namespaces :defs)
+     (swap! state* dissoc :namespaces :defs :def-history)
      (fetch-namespaces! id))])
 
 (defn- namespace-list
@@ -67,6 +67,7 @@
    (sort-by :namespace/name (:namespaces @state*))
    :namespace/name
    (fn [{:keys [namespace/name]}]
+     (swap! state* dissoc :defs :def-history)
      (fetch-defs! (:selected-commit-id @state*) name))])
 
 (defn- def-table
